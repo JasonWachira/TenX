@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func, distinct
+from sqlalchemy import func, distinct, desc
 
 from models.db import engine, Base
 from models.models import Candidate, Donation, Expense
@@ -21,9 +21,9 @@ def overview(db: Session = Depends(get_db)):
     total_spent = db.query(func.sum(Candidate.total_spent)).scalar() or 0
 
     unique_donors = (
-        db.query(func.count(distinct(Donation.donor_name)))
-        .filter(Donation.donor_name != "Anonymous")
-        .scalar() or 0
+            db.query(func.count(distinct(Donation.donor_name)))
+            .filter(Donation.donor_name != "Anonymous")
+            .scalar() or 0
     )
 
     flagged_count = db.query(Candidate).filter(
@@ -68,10 +68,44 @@ def overview(db: Session = Depends(get_db)):
     }
 
 
+@app.get("/api/v1/candidates")
+def list_candidates(db: Session = Depends(get_db)):
+    # 1. Fetch candidates with their Party abbreviation
+    # We use a join so the chart can show "Name (Party)"
+    candidates = db.query(Candidate).all()
+
+    results = []
+    for c in candidates:
+        # Calculate funding specifically from transactions to ensure accuracy
+        actual_funding = db.query(func.sum(Donation.amount)) \
+                             .filter(Donation.candidate_id == c.id).scalar() or 0
+
+        # Green = Safe, Red = Over Limit, Yellow = Within 10% of Limit
+        status = "Safe"
+        if actual_funding > c.legal_spending_limit:
+            status = "Over Limit"
+        elif actual_funding > (c.legal_spending_limit * 0.9):
+            status = "Warning"
+
+        results.append({
+            "id": c.id,
+            "name": c.full_name,
+            "party": c.party.abbreviation if c.party else "IND",
+            "office": c.office,
+            "total_funding": actual_funding,
+            "legal_limit": c.legal_spending_limit,
+            "status": status,
+            "compliance_pct": round((actual_funding / c.legal_spending_limit) * 100,
+                                    1) if c.legal_spending_limit > 0 else 0
+        })
+
+    return sorted(results, key=lambda x: x['total_funding'], reverse=True)
+
+
 @app.get("/api/v1/candidates/{candidate_id}/analysis")
 def candidate_analysis(
-    candidate_id: int,
-    db: Session = Depends(get_db)
+        candidate_id: int,
+        db: Session = Depends(get_db)
 ):
     candidate = db.query(Candidate).filter_by(id=candidate_id).first()
     if not candidate:
@@ -117,4 +151,46 @@ def candidate_analysis(
             "balance": candidate.total_raised - candidate.total_spent
         },
         "risk_flags": flags
+    }
+
+
+@app.get("/api/v1/donors/influence")
+def donor_influence(db: Session = Depends(get_db)):
+    # Top Donors by Total Amount
+    top_donors = (
+        db.query(
+            Donation.donor_name,
+            func.sum(Donation.amount).label("total_amount")
+        )
+        .group_by(Donation.donor_name)
+        .order_by(func.sum(Donation.amount).desc())
+        .limit(10)
+        .all()
+    )
+
+    # Donor who funds most candidates
+
+    serial_donors = (
+        db.query(
+            Donation.donor_name,
+            func.count(distinct(Donation.candidate_id)).label("candidate_count"),
+            func.sum(Donation.amount).label("total_invested")
+        )
+        .group_by(Donation.donor_name)
+        .having(func.count(distinct(Donation.candidate_id)) > 0)
+        .order_by(desc("candidate_count"))
+        .all()
+    )
+
+    return {
+        "top_donors_chart": [
+            {"name": name, "amount": amount} for name, amount in top_donors
+        ],
+        "influence_table": [
+            {
+                "donor": name,
+                "candidates_funded": count,
+                "total_amount": amount
+            } for name, count, amount in serial_donors
+        ]
     }

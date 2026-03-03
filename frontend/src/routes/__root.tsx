@@ -3,6 +3,7 @@ import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
 
 import '../styles.css'
+import { NavigationTop, NavigationBottom } from '#/components/navigation'
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -11,6 +12,7 @@ export const Route = createRootRoute({
 function RootComponent() {
   return (
     <>
+    <NavigationTop />
       <Outlet />
       <TanStackDevtools
         config={{
@@ -23,6 +25,7 @@ function RootComponent() {
           },
         ]}
       />
+    <NavigationBottom />
     </>
   )
 }

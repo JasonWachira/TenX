@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func, distinct
+from sqlalchemy import func, distinct, desc
 
 from models.db import engine, Base
 from models.models import Candidate, Donation, Expense
@@ -80,7 +80,6 @@ def list_candidates(db: Session = Depends(get_db)):
         actual_funding = db.query(func.sum(Donation.amount)) \
                              .filter(Donation.candidate_id == c.id).scalar() or 0
 
-        # LOGIC: Compliance Status
         # Green = Safe, Red = Over Limit, Yellow = Within 10% of Limit
         status = "Safe"
         if actual_funding > c.legal_spending_limit:
@@ -100,9 +99,7 @@ def list_candidates(db: Session = Depends(get_db)):
                                     1) if c.legal_spending_limit > 0 else 0
         })
 
-    # Sort by funding descending so the Bar Chart looks ranked
     return sorted(results, key=lambda x: x['total_funding'], reverse=True)
-
 
 
 @app.get("/api/v1/candidates/{candidate_id}/analysis")
@@ -154,4 +151,46 @@ def candidate_analysis(
             "balance": candidate.total_raised - candidate.total_spent
         },
         "risk_flags": flags
+    }
+
+
+@app.get("/api/v1/donors/influence")
+def donor_influence(db: Session = Depends(get_db)):
+    # Top Donors by Total Amount
+    top_donors = (
+        db.query(
+            Donation.donor_name,
+            func.sum(Donation.amount).label("total_amount")
+        )
+        .group_by(Donation.donor_name)
+        .order_by(func.sum(Donation.amount).desc())
+        .limit(10)
+        .all()
+    )
+
+    # Donor who funds most candidates
+
+    serial_donors = (
+        db.query(
+            Donation.donor_name,
+            func.count(distinct(Donation.candidate_id)).label("candidate_count"),
+            func.sum(Donation.amount).label("total_invested")
+        )
+        .group_by(Donation.donor_name)
+        .having(func.count(distinct(Donation.candidate_id)) > 0)
+        .order_by(desc("candidate_count"))
+        .all()
+    )
+
+    return {
+        "top_donors_chart": [
+            {"name": name, "amount": amount} for name, amount in top_donors
+        ],
+        "influence_table": [
+            {
+                "donor": name,
+                "candidates_funded": count,
+                "total_amount": amount
+            } for name, count, amount in serial_donors
+        ]
     }

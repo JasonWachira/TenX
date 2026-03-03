@@ -21,9 +21,9 @@ def overview(db: Session = Depends(get_db)):
     total_spent = db.query(func.sum(Candidate.total_spent)).scalar() or 0
 
     unique_donors = (
-        db.query(func.count(distinct(Donation.donor_name)))
-        .filter(Donation.donor_name != "Anonymous")
-        .scalar() or 0
+            db.query(func.count(distinct(Donation.donor_name)))
+            .filter(Donation.donor_name != "Anonymous")
+            .scalar() or 0
     )
 
     flagged_count = db.query(Candidate).filter(
@@ -68,10 +68,36 @@ def overview(db: Session = Depends(get_db)):
     }
 
 
+@app.get("/api/v1/candidates")
+def list_candidates(db: Session = Depends(get_db)):
+    candidates = db.query(Candidate).all()
+    results = []
+    for c in candidates:
+        actual_funding = db.query(func.sum(Donation.amount)).filter(Donation.candidate_id == c.id).scalar() or 0
+        status = "Safe"
+        if actual_funding > c.legal_spending_limit:
+            status = "Over Limit"
+        elif actual_funding > (c.legal_spending_limit * 0.9):
+            status = "Warning"
+
+        results.append({
+            "id": c.id,
+            "name": c.full_name,
+            "party": c.party.abbreviation if c.party else "IND",
+            "office": c.office,
+            "total_funding": actual_funding,
+            "legal_limit": c.legal_spending_limit,
+            "status": status,
+            "compliance_pct": round((actual_funding / c.legal_spending_limit) * 100,
+                                    1) if c.legal_spending_limit > 0 else 0
+        })
+    return sorted(results, key=lambda x: x['total_funding'], reverse=True)
+
+
 @app.get("/api/v1/candidates/{candidate_id}/analysis")
 def candidate_analysis(
-    candidate_id: int,
-    db: Session = Depends(get_db)
+        candidate_id: int,
+        db: Session = Depends(get_db)
 ):
     candidate = db.query(Candidate).filter_by(id=candidate_id).first()
     if not candidate:

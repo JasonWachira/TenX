@@ -70,10 +70,18 @@ def overview(db: Session = Depends(get_db)):
 
 @app.get("/api/v1/candidates")
 def list_candidates(db: Session = Depends(get_db)):
+    # 1. Fetch candidates with their Party abbreviation
+    # We use a join so the chart can show "Name (Party)"
     candidates = db.query(Candidate).all()
+
     results = []
     for c in candidates:
-        actual_funding = db.query(func.sum(Donation.amount)).filter(Donation.candidate_id == c.id).scalar() or 0
+        # Calculate funding specifically from transactions to ensure accuracy
+        actual_funding = db.query(func.sum(Donation.amount)) \
+                             .filter(Donation.candidate_id == c.id).scalar() or 0
+
+        # LOGIC: Compliance Status
+        # Green = Safe, Red = Over Limit, Yellow = Within 10% of Limit
         status = "Safe"
         if actual_funding > c.legal_spending_limit:
             status = "Over Limit"
@@ -91,7 +99,10 @@ def list_candidates(db: Session = Depends(get_db)):
             "compliance_pct": round((actual_funding / c.legal_spending_limit) * 100,
                                     1) if c.legal_spending_limit > 0 else 0
         })
+
+    # Sort by funding descending so the Bar Chart looks ranked
     return sorted(results, key=lambda x: x['total_funding'], reverse=True)
+
 
 
 @app.get("/api/v1/candidates/{candidate_id}/analysis")

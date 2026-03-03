@@ -1,3 +1,5 @@
 .idea/
 backend/instance/
 backend/models/__pycache__/
+__pycache__/
+backend/campaign_finance.db

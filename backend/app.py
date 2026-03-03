@@ -21,9 +21,9 @@ def overview(db: Session = Depends(get_db)):
     total_spent = db.query(func.sum(Candidate.total_spent)).scalar() or 0
 
     unique_donors = (
-        db.query(func.count(distinct(Donation.donor_name)))
-        .filter(Donation.donor_name != "Anonymous")
-        .scalar() or 0
+            db.query(func.count(distinct(Donation.donor_name)))
+            .filter(Donation.donor_name != "Anonymous")
+            .scalar() or 0
     )
 
     flagged_count = db.query(Candidate).filter(
@@ -107,8 +107,8 @@ def list_candidates(db: Session = Depends(get_db)):
 
 @app.get("/api/v1/candidates/{candidate_id}/analysis")
 def candidate_analysis(
-    candidate_id: int,
-    db: Session = Depends(get_db)
+        candidate_id: int,
+        db: Session = Depends(get_db)
 ):
     candidate = db.query(Candidate).filter_by(id=candidate_id).first()
     if not candidate:

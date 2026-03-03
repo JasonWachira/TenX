@@ -6,13 +6,17 @@ export const Route = createFileRoute('/candidates/')({
 
 function RouteComponent() {
   return (
-  <div className='p-12'>
-    Hello, pick a candidate!
+    <div className='grid gap-10'>
+      Hello candidates!
 
-    {Array.from({ length: 10 }).map((_, i) => (
-      <div key={i}>
-        <a href={`/candidates/${i + 1}`}>Candidate {i + 1}</a>
+
+<div className='flex'>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i}>
+          <a className='hover:bg-gray-100 p-2 rounded-md' href={`/candidates/${i + 1}`}>Candidate {i + 1}</a>
+        </div>
+      ))}
       </div>
-    ))}
-  </div>)
+    </div>
+  )
 }

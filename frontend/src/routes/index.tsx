@@ -4,8 +4,8 @@ export const Route = createFileRoute('/')({ component: App })
 
 function App() {
   return (
-    <main className="p-12">
-      Hello "Home!"
+    <main>
+      <h1>Welcome to the TenX Hackathon Project</h1>
     </main>
   )
 }
